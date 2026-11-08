@@ -11,9 +11,9 @@ jobs:
         run: |
           NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_ROOT}"
           BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          export CC_armv7_linux_androideabi="$BIN/armv7a-linux-androideabi21-clang"
+          export CC_armv7_linux_androideabi="$BIN/armv7a-linux-androideabi28-clang"
           export AR_armv7_linux_androideabi="$BIN/llvm-ar"
-          export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$BIN/armv7a-linux-androideabi21-clang"
+          export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$BIN/armv7a-linux-androideabi28-clang"
           cargo build --release -p pumpkin --target armv7-linux-androideabi
       - uses: actions/upload-artifact@v4
         with:
