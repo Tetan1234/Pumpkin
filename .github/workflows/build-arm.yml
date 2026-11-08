@@ -19,3 +19,4 @@ jobs:
         with:
           name: pumpkin-armv7
           path: target/armv7-linux-androideabi/release/pumpkin
+# retry
