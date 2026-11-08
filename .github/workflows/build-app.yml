@@ -1,0 +1,55 @@
+name: Build Pumpkin Box app
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID of the successful Pumpkin build"
+        default: "42457316226"
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android SDK packages
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+      - name: Download the Pumpkin binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ inputs.run_id }}" -n pumpkin-armv7 -D bin --repo "$GITHUB_REPOSITORY"
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_ROOT}"
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --strip-unneeded bin/pumpkin
+          ls -l bin/pumpkin
+      - uses: actions/cache@v4
+        with:
+          path: mibox-app/key.jks
+          key: pumpkinbox-signing-key-v1
+      - name: Build the app
+        working-directory: mibox-app
+        run: |
+          set -e
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          JAR="$ANDROID_HOME/platforms/android-34/android.jar"
+          rm -rf out; mkdir -p out/classes out/dex out/lib/armeabi-v7a
+          "$BT/aapt2" link -o out/base.apk -I "$JAR" --manifest AndroidManifest.xml -A assets --min-sdk-version 26 --target-sdk-version 28
+          javac -nowarn -Xlint:-options -encoding UTF-8 -source 1.8 -target 1.8 -bootclasspath "$JAR:$BT/core-lambda-stubs.jar" -d out/classes $(find src -name "*.java")
+          "$BT/d8" --min-api 26 --release --lib "$JAR" --output out/dex $(find out/classes -name "*.class")
+          cp out/base.apk out/unsigned.apk
+          (cd out/dex && zip -q ../unsigned.apk classes.dex)
+          cp ../bin/pumpkin out/lib/armeabi-v7a/libpumpkin.so
+          (cd out && zip -q -r -X unsigned.apk lib)
+          "$BT/zipalign" -f 4 out/unsigned.apk out/aligned.apk
+          [ -f key.jks ] || keytool -genkeypair -keystore key.jks -storepass pumpkin123 -keypass pumpkin123 -alias pk -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=pumpkinbox"
+          "$BT/apksigner" sign --ks key.jks --ks-pass pass:pumpkin123 --out out/pumpkinbox.apk out/aligned.apk
+          ls -l out/pumpkinbox.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pumpkinbox-apk
+          path: mibox-app/out/pumpkinbox.apk
